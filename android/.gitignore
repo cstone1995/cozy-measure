@@ -1,0 +1,62 @@
+# Gradle files
+.gradle/
+build/
+
+# Local configuration file (sdk path, etc)
+local.properties
+/local.properties
+
+# Log/OS Files
+*.log
+.DS_Store
+Thumbs.db
+
+# Android Studio generated files and folders
+captures/
+/captures
+.externalNativeBuild/
+.externalNativeBuild
+.cxx/
+.cxx
+.kotlin/
+*.aab
+*.apk
+*.ap_
+*.dex
+output-metadata.json
+/app/build
+
+# IntelliJ
+*.iml
+.idea/
+misc.xml
+deploymentTargetDropDown.xml
+render.experimental.xml
+
+# Keystore files
+*.jks
+*.keystore
+
+# Google Services (e.g. APIs or Firebase)
+google-services.json
+
+# Android Profiling
+*.hprof
+
+# Decompiled packages and reverse engineering files
+/decompiled/
+*.jobf
+/commonMain/
+/io/
+/assets/
+
+# Media files and screen recordings
+*.mp4
+*.mov
+*.avi
+*.webm
+*.mkv
+
+# Root assets
+/*.png
+/*.svg

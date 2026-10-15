@@ -1,0 +1,19 @@
+name: CozyMeasure
+options:
+  bundleIdPrefix: uk.cozyflooring
+  deploymentTarget:
+    iOS: '16.0'
+targets:
+  CozyMeasure:
+    type: application
+    platform: iOS
+    sources: [CozyMeasure]
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: uk.cozyflooring.measure
+        SWIFT_VERSION: '5.0'
+        GENERATE_INFOPLIST_FILE: YES
+        INFOPLIST_KEY_CFBundleDisplayName: Cozy Measure
+        INFOPLIST_KEY_NSCameraUsageDescription: Use your camera to estimate room dimensions for carpet.
+        INFOPLIST_KEY_UILaunchScreen_Generation: YES
+        TARGETED_DEVICE_FAMILY: '1,2'
