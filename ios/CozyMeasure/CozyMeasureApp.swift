@@ -101,9 +101,11 @@ struct ContentView: View {
     @State private var tab = 0
     @State private var roomName = "Living room"
     @State private var savedRooms: [SavedRoom] = (UserDefaults.standard.data(forKey: "cozy_rooms").flatMap { try? JSONDecoder().decode([SavedRoom].self, from: $0) }) ?? []
-    @State private var length = "", width = ""
+    @State private var length = ""
+    @State private var width = ""
     @State private var roll = "both"
-    @State private var allowance = true, confirmed = false
+    @State private var allowance = true
+    @State private var confirmed = false
     @State private var result: CarpetCut?
     @State private var error = ""
     private func persistRooms() { if let data = try? JSONEncoder().encode(savedRooms) { UserDefaults.standard.set(data, forKey: "cozy_rooms") } }
