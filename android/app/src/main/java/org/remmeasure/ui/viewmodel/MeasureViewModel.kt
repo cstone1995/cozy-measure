@@ -15,6 +15,9 @@ import org.remmeasure.core.model.TrackingStatus
 import org.remmeasure.core.model.Vector3
 
 data class MeasureUiState(
+    val roomCorners: List<Vector3> = emptyList(),
+    val roomClosed: Boolean = false,
+    val roomMessage: String = "Move your phone slowly over the floor to find it.",
     val measurements: List<MeasurementSegment> = emptyList(),
     val currentStartPoint: Vector3? = null,
     val candidatePoint: Vector3? = null,
@@ -49,40 +52,26 @@ class MeasureViewModel(application: Application) : AndroidViewModel(application)
 
     fun onSurfaceHit(rawHitPoint: Vector3, isVerticalSnap: Boolean = false) {
         val state = _uiState.value
-        val existingEndpoints = state.measurements.flatMap { listOf(it.start, it.end) }
+        if(state.roomClosed) return
+        val floor = state.roomCorners.firstOrNull()?.y ?: rawHitPoint.y
+        if(kotlin.math.abs(rawHitPoint.y-floor)>0.08f){ invalidateRoomTarget("Aim at the same floor, not furniture or a step.");return }
+        val point=Vector3(rawHitPoint.x,floor,rawHitPoint.z)
+        _uiState.update { it.copy(candidatePoint=point,liveDistanceMeters=state.roomCorners.lastOrNull()?.distanceTo(point) ?: 0f,trackingStatus=TrackingStatus.TRACKING_READY) }
+    }
 
-        // Check if candidate point snaps to any existing placed point
-        val snappedToPoint = if (!isVerticalSnap) {
-            MeasurementMath.snapToExistingPoint(rawHitPoint, existingEndpoints)
-        } else null
-
-        val resolvedPoint = if (snappedToPoint != null) {
-            snappedToPoint
-        } else if (isVerticalSnap) {
-            rawHitPoint
-        } else if (state.currentStartPoint != null) {
-            // Check axis-locking (horizontal or vertical) from start point
-            MeasurementMath.snapToAxisIfClose(state.currentStartPoint, rawHitPoint)
-        } else {
-            rawHitPoint
+    fun invalidateRoomTarget(message: String) { _uiState.update { it.copy(candidatePoint=null,roomMessage=message) } }
+    fun closeRoom(): Boolean {
+        val state=_uiState.value
+        if(org.remmeasure.core.math.RoomGeometry.summarize(state.roomCorners)==null){
+            _uiState.update{it.copy(roomMessage="Outline overlaps or is too small. Undo a corner and try again.")};return false
         }
-
-        val isSnappedPoint = snappedToPoint != null
-        val isSnappedAxis = isVerticalSnap || (state.currentStartPoint != null && resolvedPoint != rawHitPoint && !isSnappedPoint)
-
-        val liveDistance = if (state.currentStartPoint != null) {
-            state.currentStartPoint.distanceTo(resolvedPoint)
-        } else 0f
-
-        _uiState.update {
-            it.copy(
-                candidatePoint = resolvedPoint,
-                liveDistanceMeters = liveDistance,
-                isSnappedToAxis = isSnappedAxis,
-                isSnappedToPoint = isSnappedPoint,
-                trackingStatus = if (it.currentStartPoint != null) TrackingStatus.POINT_PLACED else TrackingStatus.TRACKING_READY
-            )
-        }
+        val edges=state.roomCorners.indices.map{ i -> MeasurementSegment(start=state.roomCorners[i],end=state.roomCorners[(i+1)%state.roomCorners.size]) }
+        _uiState.update{it.copy(roomClosed=true,currentStartPoint=null,candidatePoint=null,measurements=edges,roomMessage="Room complete. Open Carpet size to review the floor plan.")};return true
+    }
+    fun undoRoomCorner() {
+        val state=_uiState.value
+        val points=if(state.roomClosed)state.roomCorners else state.roomCorners.dropLast(1)
+        _uiState.update{it.copy(roomCorners=points,roomClosed=false,currentStartPoint=points.lastOrNull(),measurements=points.zipWithNext{a,b->MeasurementSegment(start=a,end=b)},candidatePoint=null,roomMessage="Aim at the next floor corner and add it.")}
     }
 
     fun onTrackingStateUpdated(newStatus: TrackingStatus) {
@@ -97,35 +86,14 @@ class MeasureViewModel(application: Application) : AndroidViewModel(application)
     }
 
     fun onPrimaryActionButtonClicked(): Boolean {
-        val state = _uiState.value
-        val candidate = state.candidatePoint ?: return false
-
-        return if (state.currentStartPoint == null) {
-            // Start a new measurement segment
-            _uiState.update {
-                it.copy(
-                    currentStartPoint = candidate,
-                    trackingStatus = TrackingStatus.POINT_PLACED
-                )
-            }
-            true
-        } else {
-            // Finish current segment
-            val newSegment = MeasurementSegment(
-                start = state.currentStartPoint,
-                end = candidate
-            )
-            _uiState.update {
-                it.copy(
-                    measurements = it.measurements + newSegment,
-                    currentStartPoint = null,
-                    liveDistanceMeters = 0f,
-                    trackingStatus = TrackingStatus.TRACKING_READY,
-                    selectedSegment = null
-                )
-            }
-            true
-        }
+        val state=_uiState.value
+        if(state.roomClosed)return false
+        val candidate=state.candidatePoint ?: return false
+        if(state.roomCorners.size>=40){_uiState.update{it.copy(roomMessage="Maximum 40 corners. Finish this room.")};return false}
+        if(state.roomCorners.lastOrNull()?.distanceTo(candidate)?.let{it<0.1f}==true){_uiState.update{it.copy(roomMessage="Move to the next corner; these points are too close.")};return false}
+        val points=state.roomCorners+candidate
+        _uiState.update{it.copy(roomCorners=points,currentStartPoint=candidate,candidatePoint=null,measurements=points.zipWithNext{a,b->MeasurementSegment(start=a,end=b)},roomMessage="Corner ${points.size} saved. Follow the wall to the next corner.")}
+        return true
     }
 
     fun cancelActiveMeasurement() {
@@ -141,6 +109,9 @@ class MeasureViewModel(application: Application) : AndroidViewModel(application)
     fun clearAllMeasurements() {
         _uiState.update {
             it.copy(
+                roomCorners = emptyList(),
+                roomClosed = false,
+                roomMessage = "Find the floor, then add each corner in order.",
                 measurements = emptyList(),
                 currentStartPoint = null,
                 liveDistanceMeters = 0f,

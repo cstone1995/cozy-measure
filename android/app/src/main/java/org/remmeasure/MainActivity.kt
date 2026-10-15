@@ -77,7 +77,8 @@ fun MainAppScaffold(
         ) {
             composable(NavDestination.Measure.route) {
                 MeasureScreen(
-                    viewModel = measureViewModel
+                    viewModel = measureViewModel,
+                    onReviewRoom = { navController.navigate(NavDestination.Level.route) }
                 )
             }
 

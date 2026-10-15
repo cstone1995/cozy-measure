@@ -92,7 +92,8 @@ private val GoogleYellow = Color(0xFFFBBB04)
 @Composable
 fun MeasureScreen(
     viewModel: MeasureViewModel = viewModel(),
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    onReviewRoom: () -> Unit = {}
 ) {
     val context = LocalContext.current
     val activity = context as? Activity
@@ -195,7 +196,7 @@ fun MeasureScreen(
             childNodes = childNodes,
             planeRenderer = false,
             sessionConfiguration = { session, config ->
-                config.planeFindingMode = Config.PlaneFindingMode.HORIZONTAL_AND_VERTICAL
+                config.planeFindingMode = Config.PlaneFindingMode.HORIZONTAL
                 config.lightEstimationMode = Config.LightEstimationMode.ENVIRONMENTAL_HDR
                 if (session.isDepthModeSupported(Config.DepthMode.AUTOMATIC)) {
                     config.depthMode = Config.DepthMode.AUTOMATIC
@@ -215,7 +216,7 @@ fun MeasureScreen(
                     // 1. Check vertical height snap if currently measuring from a start point
                     val startPt = uiState.currentStartPoint
                     var handledVertical = false
-                    if (startPt != null) {
+                    if (false && startPt != null) {
                         val camPose = camera.pose
                         val camOrigin = Vector3(camPose.tx(), camPose.ty(), camPose.tz())
                         val camZ = camPose.zAxis
@@ -239,10 +240,12 @@ fun MeasureScreen(
                             },
                             onNoHit = {
                                 candidatePlanePose = null
-                                viewModel.onTrackingStateUpdated(TrackingStatus.SEARCHING_FOR_SURFACES)
+                                viewModel.invalidateRoomTarget("Scan the floor slowly in good light. Aim at the floor beside the wall.")
                             }
                         )
                     }
+                } else {
+                    viewModel.invalidateRoomTarget("Tracking paused. Move slowly over a well-lit floor.")
                 }
             }
         )
@@ -683,74 +686,22 @@ fun MeasureScreen(
             modifier = Modifier.align(Alignment.TopCenter)
         )
 
-        // 5. Status Guidance Banner
-        StatusBanner(
-            status = uiState.trackingStatus,
-            isMeasuring = isMeasuring,
-            liveDistanceMeters = uiState.liveDistanceMeters,
-            unit = uiState.selectedUnit,
-            modifier = Modifier
-                .align(Alignment.TopCenter)
-                .padding(top = 118.dp)
-        )
-
-        // 6. Bottom Action Bar (+ / ✓ buttons, Camera shutter, and Start measurement tooltip)
-        BottomActionBar(
-            isMeasuring = isMeasuring,
-            isSurfaceDetected = uiState.candidatePoint != null,
-            onPrimaryAction = {
-                val succeeded = viewModel.onPrimaryActionButtonClicked()
-                if (succeeded) {
-                    triggerHaptic("snap")
-                }
-            },
-            onCancelMeasurement = {
-                viewModel.cancelActiveMeasurement()
-                triggerHaptic("heavy")
-            },
-            onCaptureSnapshot = {
-                if (activity != null) {
-                    isFlashing = true
-                    triggerHaptic("heavy")
-                    CameraSnapshotHelper.captureAndSaveSnapshot(
-                        activity = activity,
-                        onSuccess = {},
-                        onError = { e ->
-                            Toast.makeText(context, "Failed to save photo: ${e.message}", Toast.LENGTH_SHORT).show()
-                        }
-                    )
-                }
-            },
-            modifier = Modifier
-                .align(Alignment.BottomCenter)
-                .padding(bottom = 76.dp)
-        )
-
-        // 7. Selected Measurement Detail Sheet (Google Measure MD3 Card)
-        uiState.selectedSegment?.let { segment ->
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .background(Color.Black.copy(alpha = 0.35f))
-                    .clickable(
-                        interactionSource = remember { MutableInteractionSource() },
-                        indication = null,
-                        onClick = { viewModel.selectSegment(null) }
-                    ),
-                contentAlignment = Alignment.BottomCenter
-            ) {
-                MeasurementDetailSheet(
-                    segment = segment,
-                    currentUnit = uiState.selectedUnit,
-                    onDelete = {
-                        triggerHaptic("heavy")
-                        viewModel.deleteSegment(segment.id)
-                    },
-                    onDismiss = {
-                        viewModel.selectSegment(null)
-                    },
-                    modifier = Modifier.padding(bottom = 76.dp)
-                )
+        Column(Modifier.align(Alignment.TopCenter).padding(top=100.dp,start=16.dp,end=16.dp).clip(RoundedCornerShape(16.dp)).background(Color(0xEE303A34)).padding(14.dp)) {
+            Text("Cozy room scan · ${uiState.roomCorners.size} corners",color=Color.White,fontWeight=FontWeight.Bold)
+            Text(uiState.roomMessage,color=Color.White,fontSize=14.sp)
+            Text("1 Find floor  →  2 Add corners around walls  →  3 Finish room",color=Color.White,fontSize=12.sp)
+        }
+        Column(Modifier.align(Alignment.BottomCenter).padding(bottom=95.dp,start=16.dp,end=16.dp).clip(RoundedCornerShape(16.dp)).background(Color(0xEE303A34)).padding(12.dp),horizontalAlignment=Alignment.CenterHorizontally) {
+            if(uiState.roomClosed) {
+                Button(onClick=onReviewRoom) { Text("Review floor plan & carpet size") }
+            } else {
+                Text(if(uiState.candidatePoint!=null) "Floor found · aim at a corner" else "Searching for floor…",color=Color.White)
+                Button(enabled=uiState.candidatePoint!=null,onClick={viewModel.onPrimaryActionButtonClicked()}) { Text("Add corner ${uiState.roomCorners.size+1}") }
+                if(uiState.roomCorners.size>=3) Button(onClick={if(viewModel.closeRoom())onReviewRoom()}){Text("Finish room")}
+            }
+            Row(horizontalArrangement=Arrangement.spacedBy(12.dp)) {
+                Button(enabled=uiState.roomCorners.isNotEmpty(),onClick={viewModel.undoRoomCorner()}) {Text("Undo")}
+                Button(onClick={viewModel.clearAllMeasurements()}) {Text("Start again")}
             }
         }
 
@@ -823,7 +774,7 @@ private fun performCenterRaycast(
     val validHit = hitResults.firstOrNull { hit ->
         val trackable = hit.trackable
         when (trackable) {
-            is Plane -> trackable.isPoseInPolygon(hit.hitPose) && trackable.trackingState == TrackingState.TRACKING
+            is Plane -> trackable.type == Plane.Type.HORIZONTAL_UPWARD_FACING && trackable.isPoseInPolygon(hit.hitPose) && trackable.trackingState == TrackingState.TRACKING
             else -> false
         }
     }
@@ -879,7 +830,7 @@ fun CameraPermissionFallback(
             Spacer(modifier = Modifier.height(12.dp))
 
             Text(
-                text = "ReMeasure requires access to your camera to detect real-world surfaces and compute distances.",
+                text = "Cozy Measure needs access to your camera to detect real-world surfaces and compute distances.",
                 color = TextMuted,
                 fontSize = 14.sp,
                 textAlign = TextAlign.Center,

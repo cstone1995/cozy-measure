@@ -1,5 +1,7 @@
 package org.remmeasure.ui.screens
 
+import org.remmeasure.core.math.RoomGeometry
+import org.remmeasure.core.math.FloorPoint
 import org.json.JSONArray
 import org.json.JSONObject
 import android.content.Intent
@@ -36,31 +38,36 @@ fun CarpetScreen(viewModel: MeasureViewModel) {
     val prefs = remember { context.getSharedPreferences("cozy_saved_rooms", android.content.Context.MODE_PRIVATE) }
     var saved by remember { mutableStateOf(runCatching { JSONArray(prefs.getString("rooms", "[]")) }.getOrDefault(JSONArray())) }
     var roomName by remember { mutableStateOf("Living room") }
+    var plan by remember { mutableStateOf<List<FloorPoint>>(emptyList()) }
+    var measuredArea by remember { mutableStateOf<Double?>(null) }
     var length by remember { mutableStateOf("") }; var width by remember { mutableStateOf("") }
     var rolls by remember { mutableStateOf("both") }; var allowance by remember { mutableStateOf(true) }
     var confirmed by remember { mutableStateOf(false) }; var result by remember { mutableStateOf<CarpetCut?>(null) }
     var error by remember { mutableStateOf("") }
+    LaunchedEffect(state.roomClosed, state.roomCorners) {
+        if(state.roomClosed) RoomGeometry.summarize(state.roomCorners)?.let { room ->
+            length=String.format(Locale.UK,"%.3f",room.length);width=String.format(Locale.UK,"%.3f",room.width)
+            plan=room.points;measuredArea=room.area;confirmed=false;result=null
+        }
+    }
     fun number(s: String) = s.replace(',', '.').toDoubleOrNull() ?: 0.0
     Column(Modifier.fillMaxSize().statusBarsPadding().verticalScroll(rememberScrollState()).padding(20.dp).padding(bottom=120.dp), verticalArrangement=Arrangement.spacedBy(12.dp)) {
         Text("Cozy carpet size", style=MaterialTheme.typography.headlineMedium)
-        Text("1. In Measure, mark each end of the longest room length. Repeat for the widest width. 2. Choose those saved measurements below. 3. Check, save and shop.")
-        Text("For a rectangular room. Stairs, L-shapes and connected rooms need a cutting plan.")
+        Text("1. In Measure, add each floor corner around the room in order. 2. Finish the room. 3. Review this plan, confirm, save and shop.")
+        Text("Include alcoves and door recesses in the outline. Floor area and the enclosing carpet cut are different. Stairs and connected rooms need a separate plan.")
         OutlinedTextField(value=roomName,onValueChange={roomName=it.take(60)},label={Text("Room name")},modifier=Modifier.fillMaxWidth())
         for (i in 0 until saved.length()) {
             val room = saved.getJSONObject(i)
-            TextButton(onClick={length=room.getString("length");width=room.getString("width");roomName=room.getString("name");confirmed=false;result=null}) { Text("Load ${room.getString("name")}: ${room.getString("length")}m × ${room.getString("width")}m") }
+            TextButton(onClick={length=room.getString("length");width=room.getString("width");roomName=room.getString("name");confirmed=false;result=null;measuredArea=if(room.has("area")&&!room.isNull("area"))room.getDouble("area") else null;plan=runCatching{val a=room.getJSONArray("plan");(0 until a.length()).map{val p=a.getJSONObject(it);FloorPoint(p.getDouble("x"),p.getDouble("y"))}}.getOrDefault(emptyList())}) { Text("Load ${room.getString("name")}: ${room.getString("length")}m × ${room.getString("width")}m") }
         }
         Text("Measure the longest length and widest width, including door recesses. Select the correct saved measurements below, or type metres.")
-        state.measurements.sortedByDescending { it.timestamp }.take(12).forEach { measurement ->
-            Row(horizontalArrangement=Arrangement.spacedBy(8.dp)) {
-                val value = String.format(Locale.UK, "%.3f", measurement.distanceMeters)
-                Text("${value}m", Modifier.weight(1f))
-                TextButton(onClick={ length=value; confirmed=false; result=null }) { Text("Use as length") }
-                TextButton(onClick={ width=value; confirmed=false; result=null }) { Text("Use as width") }
-            }
-        }
-        OutlinedTextField(value=length,onValueChange={length=it; confirmed=false; result=null},label={Text("Length (metres)")},singleLine=true,modifier=Modifier.fillMaxWidth())
-        OutlinedTextField(value=width,onValueChange={width=it; confirmed=false; result=null},label={Text("Width (metres)")},singleLine=true,modifier=Modifier.fillMaxWidth())
+        if(plan.isNotEmpty()) {
+            RoomPlan(plan)
+            Text(String.format(Locale.UK,"Measured floor area: %.2fm²",measuredArea ?: 0.0))
+            Text("Wall labels are approximate. The dimensions below enclose the whole outline, including recesses.")
+        } else Text("No completed room scan loaded. Finish a scan or enter tape measurements below.")
+        OutlinedTextField(value=length,onValueChange={length=it; confirmed=false; result=null;plan=emptyList();measuredArea=null},label={Text("Length (metres)")},singleLine=true,modifier=Modifier.fillMaxWidth())
+        OutlinedTextField(value=width,onValueChange={width=it; confirmed=false; result=null;plan=emptyList();measuredArea=null},label={Text("Width (metres)")},singleLine=true,modifier=Modifier.fillMaxWidth())
         Text("Widths available for your chosen carpet")
         Row(horizontalArrangement=Arrangement.spacedBy(8.dp)) {
             listOf("both" to "4m & 5m", "4" to "4m only", "5" to "5m only").forEach { (value,label) ->
@@ -82,16 +89,18 @@ fun CarpetScreen(viewModel: MeasureViewModel) {
         if(error.isNotEmpty()) Text(error,color=MaterialTheme.colorScheme.error)
         result?.let { r ->
             Text(String.format(Locale.UK,"Suggested cut: %.0fm × %.1fm",r.width,r.length),style=MaterialTheme.typography.headlineSmall)
-            Text(String.format(Locale.UK,"Room: %.2fm² · Purchased carpet: %.2fm²",number(length)*number(width),r.area))
+            Text(String.format(Locale.UK,"Room: %.2fm² · Purchased carpet: %.2fm²",measuredArea ?: (number(length)*number(width)),r.area))
             Text("Orientation may be rotated. Check product minimum length, pile direction, patterns and available widths. Phone estimates need checking before ordering. Stairs and connected rooms need a separate plan.")
             Button(onClick={
-                val room=JSONObject().put("name",roomName.ifBlank { "My room" }).put("length",length).put("width",width)
+                val outline=JSONArray();plan.forEach{outline.put(JSONObject().put("x",it.x).put("y",it.y))}
+                val room=JSONObject().put("name",roomName.ifBlank { "My room" }).put("length",length).put("width",width).put("area",measuredArea).put("plan",outline)
                 val next=JSONArray(); next.put(room)
                 for(i in 0 until minOf(saved.length(),19)) if(saved.getJSONObject(i).getString("name")!=roomName) next.put(saved.getJSONObject(i))
                 prefs.edit().putString("rooms",next.toString()).apply(); saved=next
             }) { Text("Save this room") }
             Button(onClick={
-                val url=Uri.parse("https://cozyflooringstore.co.uk/collections/all").buildUpon().appendQueryParameter("cozy_room",roomName).appendQueryParameter("cozy_length",number(length).toString()).appendQueryParameter("cozy_width",number(width).toString()).build()
+                val outline=JSONArray();plan.forEach{outline.put(JSONObject().put("x",it.x).put("y",it.y))}
+                val url=Uri.parse("https://cozyflooringstore.co.uk/collections/all").buildUpon().appendQueryParameter("cozy_plan",outline.toString()).appendQueryParameter("cozy_room",roomName).appendQueryParameter("cozy_length",number(length).toString()).appendQueryParameter("cozy_width",number(width).toString()).build()
                 context.startActivity(Intent(Intent.ACTION_VIEW,url))
             }) { Text("Shop with these measurements") }
             TextButton(onClick={
