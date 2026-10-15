@@ -213,23 +213,8 @@ fun MeasureScreen(
                     cameraProjMatrix = pMat
                     frameUpdateCounter++
 
-                    // 1. Check vertical height snap if currently measuring from a start point
-                    val startPt = uiState.currentStartPoint
-                    var handledVertical = false
-                    if (false && startPt != null) {
-                        val camPose = camera.pose
-                        val camOrigin = Vector3(camPose.tx(), camPose.ty(), camPose.tz())
-                        val camZ = camPose.zAxis
-                        val camRayDir = Vector3(-camZ[0], -camZ[1], -camZ[2])
-                        val verticalSnap = MeasurementMath.checkVerticalSnap(startPt, camOrigin, camRayDir)
-                        if (verticalSnap != null) {
-                            viewModel.onSurfaceHit(verticalSnap, isVerticalSnap = true)
-                            handledVertical = true
-                        }
-                    }
-
                     // 2. Otherwise perform standard surface raycast
-                    if (!handledVertical) {
+                    run {
                         performCenterRaycast(
                             frame = frame,
                             screenX = screenWidthPx / 2f,

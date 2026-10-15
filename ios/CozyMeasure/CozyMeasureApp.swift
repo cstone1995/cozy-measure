@@ -227,6 +227,13 @@ struct ContentView: View {
                         error = result == nil ? "A join or cutting plan is needed. Ask Cozy before ordering." : ""
                     }
                     if !error.isEmpty { Text(error).foregroundColor(.red) }
+                    if confirmed && number(length)>0 && number(width)>0 {
+                        Button("Save this room") {
+                            savedRooms.removeAll { $0.name == roomName }
+                            savedRooms.insert(SavedRoom(name: roomName.isEmpty ? "My room" : roomName, length: length, width: width, plan: plan, area: floorArea), at: 0)
+                            savedRooms = Array(savedRooms.prefix(20)); persistRooms()
+                        }
+                    }
                 }
                 if let r = result {
                     Section("Suggested single-piece cut") {
@@ -234,11 +241,6 @@ struct ContentView: View {
                         Text(String(format: "Room: %.2f m² · Purchased carpet: %.2f m²", floorArea ?? number(length)*number(width), r.area))
                         Text("Orientation may be rotated. Check product minimum length, available widths, pile direction and patterns. Stairs and connected rooms need a separate plan. A single-piece enclosing cut is an estimate, not a seam layout.")
                         ShareLink(item: String(format: "Cozy estimate: room %.3fm × %.3fm; suggested cut %.0fm × %.1fm (%.2fm²). Check before ordering.", number(length),number(width),r.width,r.length,r.area)) { Text("Share estimate") }
-                        Button("Save this room") {
-                            savedRooms.removeAll { $0.name == roomName }
-                            savedRooms.insert(SavedRoom(name: roomName.isEmpty ? "My room" : roomName, length: length, width: width, plan: plan, area: floorArea), at: 0)
-                            savedRooms = Array(savedRooms.prefix(20)); persistRooms()
-                        }
                         Link("Shop with these measurements", destination: shopURL)
                     }
                 }

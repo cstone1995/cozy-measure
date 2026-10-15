@@ -60,7 +60,7 @@ fun CarpetScreen(viewModel: MeasureViewModel) {
             val room = saved.getJSONObject(i)
             TextButton(onClick={length=room.getString("length");width=room.getString("width");roomName=room.getString("name");confirmed=false;result=null;measuredArea=if(room.has("area")&&!room.isNull("area"))room.getDouble("area") else null;plan=runCatching{val a=room.getJSONArray("plan");(0 until a.length()).map{val p=a.getJSONObject(it);FloorPoint(p.getDouble("x"),p.getDouble("y"))}}.getOrDefault(emptyList())}) { Text("Load ${room.getString("name")}: ${room.getString("length")}m × ${room.getString("width")}m") }
         }
-        Text("Measure the longest length and widest width, including door recesses. Select the correct saved measurements below, or type metres.")
+        Text("Check the plan, or enter confirmed tape measurements in metres.")
         if(plan.isNotEmpty()) {
             RoomPlan(plan)
             Text(String.format(Locale.UK,"Measured floor area: %.2fm²",measuredArea ?: 0.0))
@@ -87,10 +87,7 @@ fun CarpetScreen(viewModel: MeasureViewModel) {
             }
         }) { Text("Calculate carpet size") }
         if(error.isNotEmpty()) Text(error,color=MaterialTheme.colorScheme.error)
-        result?.let { r ->
-            Text(String.format(Locale.UK,"Suggested cut: %.0fm × %.1fm",r.width,r.length),style=MaterialTheme.typography.headlineSmall)
-            Text(String.format(Locale.UK,"Room: %.2fm² · Purchased carpet: %.2fm²",measuredArea ?: (number(length)*number(width)),r.area))
-            Text("Orientation may be rotated. Check product minimum length, pile direction, patterns and available widths. Phone estimates need checking before ordering. Stairs and connected rooms need a separate plan.")
+        if(confirmed && number(length)>0 && number(width)>0) {
             Button(onClick={
                 val outline=JSONArray();plan.forEach{outline.put(JSONObject().put("x",it.x).put("y",it.y))}
                 val room=JSONObject().put("name",roomName.ifBlank { "My room" }).put("length",length).put("width",width).put("area",measuredArea).put("plan",outline)
@@ -98,6 +95,11 @@ fun CarpetScreen(viewModel: MeasureViewModel) {
                 for(i in 0 until minOf(saved.length(),19)) if(saved.getJSONObject(i).getString("name")!=roomName) next.put(saved.getJSONObject(i))
                 prefs.edit().putString("rooms",next.toString()).apply(); saved=next
             }) { Text("Save this room") }
+        }
+        result?.let { r ->
+            Text(String.format(Locale.UK,"Suggested cut: %.0fm × %.1fm",r.width,r.length),style=MaterialTheme.typography.headlineSmall)
+            Text(String.format(Locale.UK,"Room: %.2fm² · Purchased carpet: %.2fm²",measuredArea ?: (number(length)*number(width)),r.area))
+            Text("Orientation may be rotated. Check product minimum length, pile direction, patterns and available widths. Phone estimates need checking before ordering. Stairs and connected rooms need a separate plan.")
             Button(onClick={
                 val outline=JSONArray();plan.forEach{outline.put(JSONObject().put("x",it.x).put("y",it.y))}
                 val url=Uri.parse("https://cozyflooringstore.co.uk/collections/all").buildUpon().appendQueryParameter("cozy_plan",outline.toString()).appendQueryParameter("cozy_room",roomName).appendQueryParameter("cozy_length",number(length).toString()).appendQueryParameter("cozy_width",number(width).toString()).build()
