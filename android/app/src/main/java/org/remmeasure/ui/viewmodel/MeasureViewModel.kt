@@ -15,6 +15,7 @@ import org.remmeasure.core.model.TrackingStatus
 import org.remmeasure.core.model.Vector3
 
 data class MeasureUiState(
+    val roomName: String = "Living room",
     val roomCorners: List<Vector3> = emptyList(),
     val roomClosed: Boolean = false,
     val roomMessage: String = "Move your phone slowly over the floor to find it.",
@@ -58,6 +59,8 @@ class MeasureViewModel(application: Application) : AndroidViewModel(application)
         val point=Vector3(rawHitPoint.x,floor,rawHitPoint.z)
         _uiState.update { it.copy(candidatePoint=point,liveDistanceMeters=state.roomCorners.lastOrNull()?.distanceTo(point) ?: 0f,trackingStatus=TrackingStatus.TRACKING_READY) }
     }
+
+    fun setRoomName(name: String) { _uiState.update { it.copy(roomName=name.take(60)) } }
 
     fun invalidateRoomTarget(message: String) { _uiState.update { it.copy(candidatePoint=null,roomMessage=message) } }
     fun closeRoom(): Boolean {

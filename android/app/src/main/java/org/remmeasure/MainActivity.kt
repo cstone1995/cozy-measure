@@ -13,6 +13,17 @@ import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.activity.compose.BackHandler
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.ui.unit.dp
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.Text
+import org.remmeasure.ui.screens.PlannerStartScreen
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -47,7 +58,7 @@ class MainActivity : ComponentActivity() {
             }
 
             ReMeasureTheme(
-                darkTheme = isDarkTheme,
+                darkTheme = false,
                 dynamicColor = false
             ) {
                 Surface(
@@ -65,50 +76,17 @@ class MainActivity : ComponentActivity() {
 fun MainAppScaffold(
     measureViewModel: MeasureViewModel = viewModel()
 ) {
-    val navController = rememberNavController()
-    val navBackStackEntry by navController.currentBackStackEntryAsState()
-    val currentRoute = navBackStackEntry?.destination?.route ?: NavDestination.Measure.route
-
-    Box(modifier = Modifier.fillMaxSize()) {
-        NavHost(
-            navController = navController,
-            startDestination = NavDestination.Measure.route,
-            modifier = Modifier.fillMaxSize()
-        ) {
-            composable(NavDestination.Measure.route) {
-                MeasureScreen(
-                    viewModel = measureViewModel,
-                    onReviewRoom = { navController.navigate(NavDestination.Level.route) }
-                )
-            }
-
-            composable(NavDestination.Level.route) {
-                CarpetScreen(viewModel = measureViewModel)
-            }
-
-            composable(NavDestination.History.route) {
-                HistoryScreen(viewModel = measureViewModel)
-            }
-
-            composable(NavDestination.Settings.route) {
-                SettingsScreen(viewModel = measureViewModel)
-            }
-        }
-
-        // Floating Bottom Navigation Bar
-        ExpressiveFloatingBottomBar(
-            destinations = NavDestination.topLevelDestinations,
-            currentRoute = currentRoute,
-            onDestinationSelected = { destination ->
-                navController.navigate(destination.route) {
-                    popUpTo(navController.graph.findStartDestination().id) {
-                        saveState = true
-                    }
-                    launchSingleTop = true
-                    restoreState = true
-                }
-            },
-            modifier = Modifier.align(Alignment.BottomCenter)
+    var screen by rememberSaveable { mutableStateOf("home") }
+    BackHandler(enabled=screen!="home") { screen="home" }
+    when(screen) {
+        "home" -> PlannerStartScreen(
+            onScan={name -> measureViewModel.clearAllMeasurements();measureViewModel.setRoomName(name);screen="scan"},
+            onRooms={screen="saved"},onManual={screen="manual"}
         )
+        "scan" -> MeasureScreen(viewModel=measureViewModel,onReviewRoom={screen="review"})
+        else -> Column(Modifier.fillMaxSize().statusBarsPadding()) {
+            TextButton(onClick={screen="home"},modifier=Modifier.padding(horizontal=12.dp)){Text("← My rooms & new scan")}
+            CarpetScreen(viewModel=measureViewModel,importScan=screen=="review")
+        }
     }
 }

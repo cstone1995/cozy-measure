@@ -32,12 +32,12 @@ fun carpetCut(length: Double, width: Double, rolls: List<Double>, allowance: Boo
 }
 
 @Composable
-fun CarpetScreen(viewModel: MeasureViewModel) {
+fun CarpetScreen(viewModel: MeasureViewModel, importScan: Boolean = true) {
     val state by viewModel.uiState.collectAsState()
     val context = LocalContext.current
     val prefs = remember { context.getSharedPreferences("cozy_saved_rooms", android.content.Context.MODE_PRIVATE) }
     var saved by remember { mutableStateOf(runCatching { JSONArray(prefs.getString("rooms", "[]")) }.getOrDefault(JSONArray())) }
-    var roomName by remember { mutableStateOf("Living room") }
+    var roomName by remember { mutableStateOf(state.roomName) }
     var plan by remember { mutableStateOf<List<FloorPoint>>(emptyList()) }
     var measuredArea by remember { mutableStateOf<Double?>(null) }
     var length by remember { mutableStateOf("") }; var width by remember { mutableStateOf("") }
@@ -45,14 +45,14 @@ fun CarpetScreen(viewModel: MeasureViewModel) {
     var confirmed by remember { mutableStateOf(false) }; var result by remember { mutableStateOf<CarpetCut?>(null) }
     var error by remember { mutableStateOf("") }
     LaunchedEffect(state.roomClosed, state.roomCorners) {
-        if(state.roomClosed) RoomGeometry.summarize(state.roomCorners)?.let { room ->
+        if(importScan && state.roomClosed) RoomGeometry.summarize(state.roomCorners)?.let { room ->
             length=String.format(Locale.UK,"%.3f",room.length);width=String.format(Locale.UK,"%.3f",room.width)
             plan=room.points;measuredArea=room.area;confirmed=false;result=null
         }
     }
     fun number(s: String) = s.replace(',', '.').toDoubleOrNull() ?: 0.0
     Column(Modifier.fillMaxSize().statusBarsPadding().verticalScroll(rememberScrollState()).padding(20.dp).padding(bottom=120.dp), verticalArrangement=Arrangement.spacedBy(12.dp)) {
-        Text("Cozy carpet size", style=MaterialTheme.typography.headlineMedium)
+        Text("Your room plan", style=MaterialTheme.typography.headlineMedium)
         Text("1. In Measure, add each floor corner around the room in order. 2. Finish the room. 3. Review this plan, confirm, save and shop.")
         Text("Include alcoves and door recesses in the outline. Floor area and the enclosing carpet cut are different. Stairs and connected rooms need a separate plan.")
         OutlinedTextField(value=roomName,onValueChange={roomName=it.take(60)},label={Text("Room name")},modifier=Modifier.fillMaxWidth())
@@ -93,7 +93,7 @@ fun CarpetScreen(viewModel: MeasureViewModel) {
                 val room=JSONObject().put("name",roomName.ifBlank { "My room" }).put("length",length).put("width",width).put("area",measuredArea).put("plan",outline)
                 val next=JSONArray(); next.put(room)
                 for(i in 0 until minOf(saved.length(),19)) if(saved.getJSONObject(i).getString("name")!=roomName) next.put(saved.getJSONObject(i))
-                prefs.edit().putString("rooms",next.toString()).apply(); saved=next
+                prefs.edit().putString("rooms",next.toString()).apply(); saved=next;error="Room saved on this phone."
             }) { Text("Save this room") }
         }
         result?.let { r ->

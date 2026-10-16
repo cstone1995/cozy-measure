@@ -154,7 +154,7 @@ struct SavedRoom: Codable, Identifiable {
 
 struct ContentView: View {
     @StateObject private var model = RoomMeasure()
-    @State private var tab = 0
+    @State private var tab = 2
     @State private var roomName = "Living room"
     @State private var plan: [FloorPoint] = []
     @State private var floorArea: Double?
@@ -166,6 +166,7 @@ struct ContentView: View {
     @State private var confirmed = false
     @State private var result: CarpetCut?
     @State private var error = ""
+    @State private var saveMessage = ""
     private func persistRooms() { if let data = try? JSONEncoder().encode(savedRooms) { UserDefaults.standard.set(data, forKey: "cozy_rooms") } }
     private var shopURL: URL {
         var url = URLComponents(string: "https://cozyflooringstore.co.uk/collections/all")!
@@ -177,6 +178,8 @@ struct ContentView: View {
     private func number(_ s: String) -> Double { Double(s.replacingOccurrences(of: ",", with: ".")) ?? 0 }
     var body: some View {
         TabView(selection: $tab) {
+            PlannerWelcomeView(roomName:$roomName,roomCount:savedRooms.count,onScan:{model.reset();tab=0},onRooms:{tab=1})
+                .tabItem { Label("My rooms",systemImage:"house") }.tag(2)
             VStack(spacing: 12) {
                 Text("Cozy Measure").font(.largeTitle).bold()
                 Text("1 Find the floor. 2 Aim at each corner around the room and tap Add corner. Include door recesses and alcoves. 3 Finish room.").padding(.horizontal)
@@ -227,11 +230,12 @@ struct ContentView: View {
                         error = result == nil ? "A join or cutting plan is needed. Ask Cozy before ordering." : ""
                     }
                     if !error.isEmpty { Text(error).foregroundColor(.red) }
+                    if !saveMessage.isEmpty { Text(saveMessage).foregroundColor(.green) }
                     if confirmed && number(length)>0 && number(width)>0 {
                         Button("Save this room") {
                             savedRooms.removeAll { $0.name == roomName }
                             savedRooms.insert(SavedRoom(name: roomName.isEmpty ? "My room" : roomName, length: length, width: width, plan: plan, area: floorArea), at: 0)
-                            savedRooms = Array(savedRooms.prefix(20)); persistRooms()
+                            savedRooms = Array(savedRooms.prefix(20)); persistRooms();saveMessage="Room saved on this device."
                         }
                     }
                 }
@@ -246,7 +250,7 @@ struct ContentView: View {
                 }
             }.tabItem { Label("Carpet size", systemImage: "ruler") }.tag(1)
         }.tint(brown)
-        .onAppear { model.start() }
+
         .onChange(of: length) { _ in result = nil; confirmed = false }
         .onChange(of: width) { _ in result = nil; confirmed = false }
         .onChange(of: roll) { _ in result = nil }
@@ -272,5 +276,63 @@ struct FloorPlanView: View {
                 context.draw(Text(String(format:"%.2fm",hypot(b.x-a.x,b.y-a.y))).font(.caption),at:midpoint)
             }
         }.accessibilityLabel("Floor plan showing the measured room outline and wall lengths")
+    }
+}
+
+struct PlannerWelcomeView: View {
+    @Binding var roomName: String
+    let roomCount: Int
+    let onScan: () -> Void
+    let onRooms: () -> Void
+    @State private var guide = -1
+    private let titles = ["First, find the floor", "Follow the room’s corners", "Review, save and shop"]
+    private let steps = [
+        "Turn on the lights. Point your camera at a clear patch of floor and move slowly side to side. Wait for the floor to be found.",
+        "Aim where the floor meets the wall. Add the first corner. Walk around the room in one direction, adding each corner, including alcoves and door recesses. Do not add the first corner twice.",
+        "Tap Finish room after the last corner. Check the outline and wall lengths, save the room and choose a carpet cut. Check phone estimates before ordering."
+    ]
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 22) {
+                Text("COZY FLOORING").font(.caption).tracking(3).foregroundColor(.brown)
+                if guide < 0 {
+                    Text("Your room.\nA clearer plan.").font(.largeTitle).bold()
+                    Text("Measure with your camera, save a floor plan and find your carpet size.")
+                    WelcomePlanArt(step: 2).frame(height:220)
+                    TextField("Room name", text: $roomName).textFieldStyle(.roundedBorder)
+                    Button("Measure a room →") { guide=0 }.buttonStyle(.borderedProminent).controlSize(.large)
+                    Button("My saved rooms (\(roomCount))", action:onRooms).buttonStyle(.bordered).controlSize(.large)
+                    Button("I already have tape measurements", action:onRooms)
+                    Divider()
+                    Text("No account needed. Your rooms stay on this device.").font(.caption)
+                    Link("Visit Cozy Flooring ↗",destination:URL(string:"https://cozyflooringstore.co.uk/")!)
+                } else {
+                    Button("← Back") { guide -= 1 }
+                    Text("HOW TO MEASURE · \(guide+1) OF 3").font(.caption).foregroundColor(.brown)
+                    ProgressView(value:Double(guide+1),total:3)
+                    WelcomePlanArt(step:guide).frame(height:220)
+                    Text(titles[guide]).font(.title).bold()
+                    Text(steps[guide]).font(.body)
+                    Button(guide<2 ? "Next →" : "Open camera & start →") {
+                        if guide<2 { guide += 1 } else { guide = -1;onScan() }
+                    }.buttonStyle(.borderedProminent).controlSize(.large)
+                    Text("Walk safely. Stairs and different floor levels need a separate plan.").font(.caption)
+                }
+            }.padding(26).frame(maxWidth:600)
+        }.background(Color(red:0.96,green:0.945,blue:0.92))
+    }
+}
+
+struct WelcomePlanArt: View {
+    let step: Int
+    var body: some View {
+        Canvas { context,size in
+            let w=size.width,h=size.height
+            let points=[CGPoint(x:w*0.15,y:h*0.2),CGPoint(x:w*0.83,y:h*0.2),CGPoint(x:w*0.83,y:h*0.67),CGPoint(x:w*0.55,y:h*0.67),CGPoint(x:w*0.55,y:h*0.84),CGPoint(x:w*0.15,y:h*0.84)]
+            var path=Path();path.move(to:points[0]);for p in points.dropFirst(){path.addLine(to:p)};path.closeSubpath()
+            context.fill(path,with:.color(.brown.opacity(0.1)));context.stroke(path,with:.color(.brown),lineWidth:3)
+            if step>0 {for p in points {context.fill(Path(ellipseIn:CGRect(x:p.x-5,y:p.y-5,width:10,height:10)),with:.color(.brown))}}
+            context.draw(Text(Image(systemName:step==0 ? "iphone" : step==1 ? "viewfinder" : "checkmark.circle.fill")).font(.system(size:60)).foregroundColor(.brown),at:CGPoint(x:w/2,y:h/2))
+        }.background(Color.brown.opacity(0.08)).clipShape(RoundedRectangle(cornerRadius:20))
     }
 }
