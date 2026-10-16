@@ -1,0 +1,53 @@
+name: Publish Cozy Android download
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths: [".github/workflows/publish-download.yml"]
+permissions:
+  contents: read
+jobs:
+  publish:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      actions: read
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: Cozy-Measure-signed-Android
+          run-id: 38916681377
+          github-token: ${{ github.token }}
+          path: download
+      - name: Verify the tested signed APK
+        working-directory: download
+        run: |
+          set -euo pipefail
+          printf '%s\n' '27d2a78cb0a70eedd865766603dcf297be7bf354cf443131d2d689323a0300f0  Cozy-Measure.apk' | sha256sum -c -
+          sha256sum -c Cozy-Measure.apk.sha256
+      - name: Publish the versioned early-access download
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          tag=android-v0.9.0
+          if gh release view "$tag" >/dev/null 2>&1; then
+            mkdir existing
+            gh release download "$tag" --pattern Cozy-Measure.apk --dir existing
+            printf '%s\n' '27d2a78cb0a70eedd865766603dcf297be7bf354cf443131d2d689323a0300f0  existing/Cozy-Measure.apk' | sha256sum -c -
+            exit 0
+          fi
+          cat > "$RUNNER_TEMP/cozy-release-notes.md" <<'NOTES'
+          Cozy Measure 0.9.0 — Android early access.
+
+          Includes Cozy photo home screen, guided floor/ceiling corner scanning, saved rooms and carpet sizing.
+
+          Download Cozy-Measure.apk on a compatible Android phone, open it and follow the installation prompts. Camera access is used for AR tracking. Rooms are stored on the phone; shopping sends the room details to the Cozy website.
+
+          Measurements are estimates and must be checked before ordering. Ceiling detection and accuracy still need broader device testing. This APK is not an iPhone app.
+
+          Signed with the same permanent certificate as version 0.8.0. Keep saved rooms: install as an update over that signed version. Debug builds use a different signing key.
+          NOTES
+          gh release create "$tag" download/Cozy-Measure.apk download/Cozy-Measure.apk.sha256 --repo "$GH_REPO" --target a270f6b90af52e275f791c3caaa9329cb559bcf6 --prerelease --latest=false --title "Cozy Measure 0.9.0 — Android early access" --notes-file "$RUNNER_TEMP/cozy-release-notes.md"
