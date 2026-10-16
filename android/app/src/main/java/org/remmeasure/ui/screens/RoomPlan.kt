@@ -28,7 +28,8 @@ fun RoomPlan(points: List<FloorPoint>) {
         val paint=Paint(Paint.ANTI_ALIAS_FLAG).apply{color=android.graphics.Color.rgb(48,58,52);textSize=28f;textAlign=Paint.Align.CENTER}
         for(i in points.indices){val a=points[i];val b=points[(i+1)%points.size]
             drawCircle(Color(0xFF303A34),6f,androidx.compose.ui.geometry.Offset(ox+a.x.toFloat()*scale,oy+a.y.toFloat()*scale))
-            drawContext.canvas.nativeCanvas.drawText(String.format(Locale.UK,"%.2fm",hypot(b.x-a.x,b.y-a.y)),ox+((a.x+b.x)/2).toFloat()*scale,oy+((a.y+b.y)/2).toFloat()*scale-12,paint)
+            val label=if(i<26)('A'.code+i).toChar().toString() else (i+1).toString()
+            drawContext.canvas.nativeCanvas.drawText(label,ox+a.x.toFloat()*scale+18,oy+a.y.toFloat()*scale-14,paint)
         }
     }
 }

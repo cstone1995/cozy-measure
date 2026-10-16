@@ -35,6 +35,12 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.unit.IntSize
+import com.google.ar.core.Anchor
+import com.google.ar.core.HitResult
+import org.remmeasure.core.math.TargetStability
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -153,10 +159,16 @@ fun MeasureScreen(
         return
     }
 
-    val configuration = LocalConfiguration.current
-    val density = LocalDensity.current
-    val screenWidthPx = with(density) { configuration.screenWidthDp.dp.toPx() }
-    val screenHeightPx = with(density) { configuration.screenHeightDp.dp.toPx() }
+    LaunchedEffect(Unit){if(viewModel.uiState.value.roomCorners.isNotEmpty()&&!viewModel.uiState.value.roomClosed)viewModel.clearAllMeasurements()}
+    var viewport by remember { mutableStateOf(IntSize.Zero) }
+    val screenWidthPx=viewport.width.toFloat()
+    val screenHeightPx=viewport.height.toFloat()
+    val cornerAnchors=remember{mutableListOf<Anchor>()}
+    val stability=remember{TargetStability()}
+    var warmFrames by remember{mutableStateOf(0)}
+    var captureRequested by remember{mutableStateOf(false)}
+    var anchorsTracking by remember{mutableStateOf(true)}
+    DisposableEffect(Unit){onDispose{cornerAnchors.forEach{it.detach()};cornerAnchors.clear()}}
 
     // Camera view and projection matrices updated each AR frame for world-to-screen projection
     var cameraViewMatrix by remember { mutableStateOf(FloatArray(16)) }
@@ -187,7 +199,7 @@ fun MeasureScreen(
 
     val isMeasuring = uiState.currentStartPoint != null
 
-    Box(modifier = modifier.fillMaxSize()) {
+    Box(modifier = modifier.fillMaxSize().onSizeChanged{viewport=it}) {
 
         // 1. AR Scene Layer - camera stream and surface tracking
         ARScene(
@@ -203,8 +215,13 @@ fun MeasureScreen(
                 }
             },
             onSessionUpdated = { _, frame ->
+                val current=viewModel.uiState.value
+                while(cornerAnchors.size>current.roomCorners.size){cornerAnchors.removeAt(cornerAnchors.lastIndex).detach();stability.reset();warmFrames=0}
+                anchorsTracking=cornerAnchors.all{it.trackingState==TrackingState.TRACKING}
+                if(anchorsTracking && !current.roomClosed)viewModel.updateTrackedCorners(cornerAnchors.map{val p=it.pose;Vector3(p.tx(),p.ty(),p.tz())})
                 val camera = frame.camera
-                if (camera.trackingState == TrackingState.TRACKING) {
+                if (camera.trackingState == TrackingState.TRACKING && anchorsTracking && viewport.width>0 && viewport.height>0) {
+                    warmFrames++
                     val vMat = FloatArray(16)
                     val pMat = FloatArray(16)
                     camera.getViewMatrix(vMat, 0)
@@ -219,17 +236,33 @@ fun MeasureScreen(
                             frame = frame,
                             screenX = screenWidthPx / 2f,
                             screenY = screenHeightPx / 2f,
-                            onHit = { hitVector, hitPlanePose ->
-                                viewModel.onSurfaceHit(hitVector, isVerticalSnap = false)
+                            onHit = { hitVector, hitPlanePose, hit ->
                                 candidatePlanePose = hitPlanePose
+                                val stable=stability.update(hitVector,frame.timestamp)
+                                if(warmFrames<45||!stable){
+                                    viewModel.invalidateRoomTarget("Hold the target still on the floor corner for a moment.")
+                                    captureRequested=false
+                                } else {
+                                    viewModel.onSurfaceHit(hitVector, isVerticalSnap = false)
+                                    if(captureRequested){
+                                        captureRequested=false
+                                        val anchor=runCatching{hit.createAnchor()}.getOrNull()
+                                        if(anchor!=null){
+                                            if(viewModel.onPrimaryActionButtonClicked()){cornerAnchors.add(anchor);stability.reset();triggerHaptic("snap")}
+                                            else anchor.detach()
+                                        } else viewModel.invalidateRoomTarget("Tracking changed. Hold still and try this corner again.")
+                                    }
+                                }
                             },
                             onNoHit = {
                                 candidatePlanePose = null
+                                stability.reset();captureRequested=false
                                 viewModel.invalidateRoomTarget("Scan the floor slowly in good light. Aim at the floor beside the wall.")
                             }
                         )
                     }
                 } else {
+                    warmFrames=0;stability.reset();captureRequested=false
                     viewModel.invalidateRoomTarget("Tracking paused. Move slowly over a well-lit floor.")
                 }
             }
@@ -680,9 +713,9 @@ fun MeasureScreen(
             if(uiState.roomClosed) {
                 Button(onClick=onReviewRoom) { Text("Review floor plan & carpet size") }
             } else {
-                Text(if(uiState.candidatePoint!=null) "Floor found · aim at a corner" else "Searching for floor…",color=Color.White)
-                Button(enabled=uiState.candidatePoint!=null,onClick={viewModel.onPrimaryActionButtonClicked()}) { Text("Add corner ${uiState.roomCorners.size+1}") }
-                if(uiState.roomCorners.size>=3) Button(onClick={if(viewModel.closeRoom())onReviewRoom()}){Text("Finish room")}
+                Text(if(uiState.candidatePoint!=null) "Target steady · ready to capture" else "Find the floor corner and hold still",color=Color.White)
+                Button(enabled=uiState.candidatePoint!=null,onClick={captureRequested=true}) { Text("Add corner ${uiState.roomCorners.size+1}") }
+                if(uiState.roomCorners.size>=3) Button(onClick={if(anchorsTracking && viewModel.closeRoom())onReviewRoom()}){Text("Finish room")}
             }
             Row(horizontalArrangement=Arrangement.spacedBy(12.dp)) {
                 Button(enabled=uiState.roomCorners.isNotEmpty(),onClick={viewModel.undoRoomCorner()}) {Text("Undo")}
@@ -747,7 +780,7 @@ private fun performCenterRaycast(
     frame: Frame,
     screenX: Float,
     screenY: Float,
-    onHit: (Vector3, Pose?) -> Unit,
+    onHit: (Vector3, Pose?, HitResult) -> Unit,
     onNoHit: () -> Unit
 ) {
     if (frame.camera.trackingState != TrackingState.TRACKING) {
@@ -769,7 +802,7 @@ private fun performCenterRaycast(
         val pos = Vector3(pose.tx(), pose.ty(), pose.tz())
         val plane = validHit.trackable as? Plane
         val planePose = plane?.centerPose ?: pose
-        onHit(pos, planePose)
+        onHit(pos, planePose, validHit)
     } else {
         onNoHit()
     }

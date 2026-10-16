@@ -60,6 +60,14 @@ class MeasureViewModel(application: Application) : AndroidViewModel(application)
         _uiState.update { it.copy(candidatePoint=point,liveDistanceMeters=state.roomCorners.lastOrNull()?.distanceTo(point) ?: 0f,trackingStatus=TrackingStatus.TRACKING_READY) }
     }
 
+    fun updateTrackedCorners(points: List<Vector3>) {
+        val state=_uiState.value
+        if(state.roomClosed||points.size!=state.roomCorners.size||points.isEmpty())return
+        val floor=points.first().y
+        val flat=points.map{Vector3(it.x,floor,it.z)}
+        _uiState.update{it.copy(roomCorners=flat,currentStartPoint=flat.last(),measurements=flat.zipWithNext{a,b->MeasurementSegment(start=a,end=b)})}
+    }
+
     fun setRoomName(name: String) { _uiState.update { it.copy(roomName=name.take(60)) } }
 
     fun invalidateRoomTarget(message: String) { _uiState.update { it.copy(candidatePoint=null,roomMessage=message) } }
