@@ -126,7 +126,7 @@
         document.dispatchEvent(new CustomEvent('cozy:cut-applied',{detail:{room,cut,allowance:allow.checked}}));
       }
       apply.addEventListener('click',()=>{edited=false;fill(true);});
-      allow.addEventListener('change',()=>{edited=false;fill(true);});
+      allow.addEventListener('change',()=>{room.allowance=allow.checked;try{localStorage.setItem(KEY,JSON.stringify(room));}catch(_){}edited=false;fill(true);});
       fill();
     }catch(_){
       if(active){status.textContent='Your room is saved. Enter its sizes in this product’s calculator and check the available widths and minimum length.';control.hidden=true;apply.hidden=true;}
