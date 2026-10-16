@@ -23,15 +23,17 @@ import androidx.compose.ui.unit.dp
 import org.json.JSONArray
 
 @Composable
-fun PlannerStartScreen(onScan:(String)->Unit,onRooms:()->Unit,onManual:()->Unit) {
+fun PlannerStartScreen(onScan:(String, Boolean)->Unit,onRooms:()->Unit,onManual:()->Unit) {
     val context=LocalContext.current
     var roomName by rememberSaveable { mutableStateOf("Living room") }
+    var ceiling by rememberSaveable { mutableStateOf(false) }
+    val surface=if(ceiling) "ceiling" else "floor"
     var guide by rememberSaveable { mutableStateOf(-1) }
     val rooms=runCatching{JSONArray(context.getSharedPreferences("cozy_saved_rooms",0).getString("rooms","[]")).length()}.getOrDefault(0)
-    val titles=listOf("First, find the floor","Follow the room’s corners","Review, save and shop")
+    val titles=listOf("First, find the $surface","Follow the room’s corners","Review, save and shop")
     val instructions=listOf(
-        "Turn on the lights. Point your camera down at a clear patch of floor and move slowly side to side. Wait for Floor found before adding a corner.",
-        "Aim where the floor meets the wall at your first corner. Tap Add corner. Walk around the room in one direction and add every corner, including alcoves and door recesses. Do not add the first corner twice.",
+        "Turn on the lights. Point your camera at a clear patch of $surface and move slowly side to side. Wait for Surface found before adding a corner.",
+        "Aim where the $surface meets the wall at your first corner. Tap Add corner. Walk around the room in one direction and add every corner, including alcoves and door recesses. Do not add the first corner twice.",
         "After the last corner, tap Finish room. Check the outline and wall lengths. Name and save the room, then choose a carpet cut. Phone estimates need checking before you order."
     )
     Column(Modifier.fillMaxSize().background(Color(0xFFF5F1EB)).statusBarsPadding().verticalScroll(rememberScrollState()).padding(24.dp).padding(bottom=30.dp),verticalArrangement=Arrangement.spacedBy(18.dp)) {
@@ -41,6 +43,12 @@ fun PlannerStartScreen(onScan:(String)->Unit,onRooms:()->Unit,onManual:()->Unit)
             Text("Measure your room with your camera, save its floor plan and find your carpet size.")
             PlannerIllustration(2)
             OutlinedTextField(value=roomName,onValueChange={roomName=it.take(60)},label={Text("Which room are you measuring?")},singleLine=true,modifier=Modifier.fillMaxWidth())
+            Text("Where will you scan?")
+            Row(horizontalArrangement=Arrangement.spacedBy(12.dp)) {
+                FilterChip(selected=!ceiling,onClick={ceiling=false},label={Text("Floor corners")})
+                FilterChip(selected=ceiling,onClick={ceiling=true},label={Text("Ceiling corners")})
+            }
+            if(ceiling) Text("Use a flat ceiling only where its outline matches the floor. Include floor-only recesses separately. Sloped ceilings, beams and different ceiling heights need floor measurements.",style=MaterialTheme.typography.bodySmall)
             Button(onClick={guide=0},modifier=Modifier.fillMaxWidth().heightIn(min=54.dp)){Text("Measure a room →")}
             OutlinedButton(onClick=onRooms,modifier=Modifier.fillMaxWidth().heightIn(min=50.dp)){Text("My saved rooms ($rooms)")}
             TextButton(onClick=onManual,modifier=Modifier.fillMaxWidth()){Text("I already have tape measurements")}
@@ -54,7 +62,7 @@ fun PlannerStartScreen(onScan:(String)->Unit,onRooms:()->Unit,onManual:()->Unit)
             PlannerIllustration(guide)
             Text(titles[guide],style=MaterialTheme.typography.headlineMedium,fontWeight=FontWeight.Bold)
             Text(instructions[guide],style=MaterialTheme.typography.bodyLarge)
-            Button(onClick={if(guide<2)guide++ else onScan(roomName.ifBlank{"My room"})},modifier=Modifier.fillMaxWidth().heightIn(min=54.dp)){Text(if(guide<2)"Next →" else "Open camera & start →")}
+            Button(onClick={if(guide<2)guide++ else onScan(roomName.ifBlank{"My room"},ceiling)},modifier=Modifier.fillMaxWidth().heightIn(min=54.dp)){Text(if(guide<2)"Next →" else "Open camera & start →")}
             Text("Use the camera only where you can walk safely. Stairs and rooms on different levels need a separate plan.",style=MaterialTheme.typography.bodySmall)
         }
     }

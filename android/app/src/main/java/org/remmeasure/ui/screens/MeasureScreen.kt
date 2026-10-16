@@ -101,6 +101,7 @@ fun MeasureScreen(
     modifier: Modifier = Modifier,
     onReviewRoom: () -> Unit = {}
 ) {
+    val surface = viewModel.surfaceName
     val context = LocalContext.current
     val activity = context as? Activity
     val uiState by viewModel.uiState.collectAsState()
@@ -234,13 +235,14 @@ fun MeasureScreen(
                     run {
                         performCenterRaycast(
                             frame = frame,
+                            ceilingMode = viewModel.ceilingMode,
                             screenX = screenWidthPx / 2f,
                             screenY = screenHeightPx / 2f,
                             onHit = { hitVector, hitPlanePose, hit ->
                                 candidatePlanePose = hitPlanePose
                                 val stable=stability.update(hitVector,frame.timestamp)
                                 if(warmFrames<45){
-                                    viewModel.invalidateRoomTarget("Finding the floor. Move the phone slowly over the room.")
+                                    viewModel.invalidateRoomTarget("Finding the $surface. Move the phone slowly over the room.")
                                     captureRequested=false
                                 } else {
                                     viewModel.onSurfaceHit(hitVector, isVerticalSnap = false, isStable = stable)
@@ -257,13 +259,13 @@ fun MeasureScreen(
                             onNoHit = {
                                 candidatePlanePose = null
                                 stability.reset();captureRequested=false
-                                viewModel.invalidateRoomTarget("Scan the floor slowly in good light. Aim at the floor beside the wall.")
+                                viewModel.invalidateRoomTarget("Scan the $surface slowly in good light. Aim beside the wall.")
                             }
                         )
                     }
                 } else {
                     warmFrames=0;stability.reset();captureRequested=false
-                    viewModel.invalidateRoomTarget("Tracking paused. Move slowly over a well-lit floor.")
+                    viewModel.invalidateRoomTarget("Tracking paused. Move slowly across a well-lit $surface.")
                 }
             }
         )
@@ -705,15 +707,15 @@ fun MeasureScreen(
         )
 
         Column(Modifier.align(Alignment.TopCenter).padding(top=100.dp,start=16.dp,end=16.dp).clip(RoundedCornerShape(16.dp)).background(Color(0xEE303A34)).padding(14.dp)) {
-            Text("Cozy room scan · ${uiState.roomCorners.size} corners",color=Color.White,fontWeight=FontWeight.Bold)
+            Text("Cozy $surface scan · ${uiState.roomCorners.size} corners",color=Color.White,fontWeight=FontWeight.Bold)
             Text(uiState.roomMessage,color=Color.White,fontSize=14.sp)
-            Text("1 Find floor  →  2 Add corners around walls  →  3 Finish room",color=Color.White,fontSize=12.sp)
+            Text("1 Find $surface  →  2 Add corners around walls  →  3 Finish room",color=Color.White,fontSize=12.sp)
         }
         Column(Modifier.align(Alignment.BottomCenter).padding(bottom=95.dp,start=16.dp,end=16.dp).clip(RoundedCornerShape(16.dp)).background(Color(0xEE303A34)).padding(12.dp),horizontalAlignment=Alignment.CenterHorizontally) {
             if(uiState.roomClosed) {
                 Button(onClick=onReviewRoom) { Text("Review floor plan & carpet size") }
             } else {
-                Text(if(uiState.candidatePoint!=null) "Floor found · tap Add corner" else "Move slowly to find the floor",color=Color.White)
+                Text(if(uiState.candidatePoint!=null) "Surface found · tap Add corner" else "Move slowly to find the $surface",color=Color.White)
                 Button(enabled=uiState.candidatePoint!=null,onClick={captureRequested=true}) { Text("Add corner ${uiState.roomCorners.size+1}") }
                 if(uiState.roomCorners.size>=3) Button(onClick={if(anchorsTracking && viewModel.closeRoom())onReviewRoom()}){Text("Finish room")}
             }
@@ -778,6 +780,7 @@ private fun projectWorldToScreen(
 
 private fun performCenterRaycast(
     frame: Frame,
+    ceilingMode: Boolean,
     screenX: Float,
     screenY: Float,
     onHit: (Vector3, Pose?, HitResult) -> Unit,
@@ -792,7 +795,7 @@ private fun performCenterRaycast(
     val validHit = hitResults.firstOrNull { hit ->
         val trackable = hit.trackable
         when (trackable) {
-            is Plane -> trackable.type == Plane.Type.HORIZONTAL_UPWARD_FACING && trackable.isPoseInPolygon(hit.hitPose) && trackable.trackingState == TrackingState.TRACKING
+            is Plane -> trackable.type == (if (ceilingMode) Plane.Type.HORIZONTAL_DOWNWARD_FACING else Plane.Type.HORIZONTAL_UPWARD_FACING) && trackable.isPoseInPolygon(hit.hitPose) && trackable.trackingState == TrackingState.TRACKING
             else -> false
         }
     }

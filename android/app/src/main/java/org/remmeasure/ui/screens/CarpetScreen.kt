@@ -63,6 +63,7 @@ fun CarpetScreen(viewModel: MeasureViewModel, importScan: Boolean = true) {
             TextButton(onClick={length=room.getString("length");width=room.getString("width");roomName=room.getString("name");confirmed=false;result=null;measuredArea=if(room.has("area")&&!room.isNull("area"))room.getDouble("area") else null;plan=runCatching{val a=room.getJSONArray("plan");(0 until a.length()).map{val p=a.getJSONObject(it);FloorPoint(p.getDouble("x"),p.getDouble("y"))}}.getOrDefault(emptyList())}) { Text("Load ${room.getString("name")}: ${room.getString("length")}m × ${room.getString("width")}m") }
         }
         Text("Check the plan, or enter confirmed tape measurements in metres.")
+        if(importScan && viewModel.ceilingMode) Text("Ceiling-based estimate: check that this outline matches the floor, including recesses hidden below.",color=MaterialTheme.colorScheme.primary)
         if(plan.isNotEmpty()) {
             RoomPlan(plan)
             Text(String.format(Locale.UK,"Measured floor area: %.2fm²",measuredArea ?: 0.0))
@@ -88,7 +89,8 @@ fun CarpetScreen(viewModel: MeasureViewModel, importScan: Boolean = true) {
         Button(onClick={
             result=null
             val l=number(length); val w=number(width)
-            if (!confirmed || !l.isFinite() || !w.isFinite() || l<=0 || w<=0) error="Enter positive dimensions and confirm them."
+            if (!l.isFinite() || !w.isFinite() || l<=0 || w<=0) error="Enter a valid length and width above zero."
+            else if (!confirmed) error="Confirm your dimensions to continue."
             else {
                 result=carpetCut(l,w,if(rolls=="both") listOf(4.0,5.0) else listOf(rolls.toDouble()),allowance)
                 error=if(result==null) "A join or cutting plan is needed. Ask Cozy before ordering." else ""
