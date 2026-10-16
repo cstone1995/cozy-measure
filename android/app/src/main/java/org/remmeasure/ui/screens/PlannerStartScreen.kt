@@ -3,6 +3,14 @@ package org.remmeasure.ui.screens
 import android.content.Intent
 import android.net.Uri
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.Image
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.unit.sp
+import org.remmeasure.R
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
@@ -37,13 +45,23 @@ fun PlannerStartScreen(onScan:(String, Boolean)->Unit,onRooms:()->Unit,onManual:
         "After the last corner, tap Finish room. Check the outline and wall lengths. Name and save the room, then choose a carpet cut. Phone estimates need checking before you order."
     )
     Column(Modifier.fillMaxSize().background(Color(0xFFF5F1EB)).statusBarsPadding().verticalScroll(rememberScrollState()).padding(24.dp).padding(bottom=30.dp),verticalArrangement=Arrangement.spacedBy(18.dp)) {
-        Text("COZY FLOORING",color=Color(0xFF8B7566),style=MaterialTheme.typography.labelLarge)
+        Row(Modifier.fillMaxWidth(),verticalAlignment=Alignment.CenterVertically,horizontalArrangement=Arrangement.SpaceBetween) {
+            Column { Text("cozy",fontFamily=FontFamily.Serif,fontSize=38.sp,color=Color(0xFF6B5547)); Text("FLOORING · ROOM MEASURING",fontSize=10.sp,letterSpacing=1.4.sp,color=Color(0xFF6B5547)) }
+            Text("Made for your home",style=MaterialTheme.typography.labelSmall,color=Color(0xFF6B5547))
+        }
         if(guide<0) {
-            Text("Your room.\nA clearer plan.",style=MaterialTheme.typography.headlineLarge,fontWeight=FontWeight.Bold)
-            Text("Measure your room with your camera, save its floor plan and find your carpet size.")
-            PlannerIllustration(2)
+            Image(painter=painterResource(R.drawable.cozy_home),contentDescription="Warm, neutral interior from the Cozy Flooring storefront",contentScale=ContentScale.Crop,modifier=Modifier.fillMaxWidth().height(200.dp).clip(RoundedCornerShape(22.dp)))
+            Text("A cozier home\nstarts here.",style=MaterialTheme.typography.headlineLarge,fontFamily=FontFamily.Serif,color=Color(0xFF303A34))
+            Text("Measure your space. Save your room. Find your flooring.",color=Color(0xFF66645C))
+            Surface(shape=RoundedCornerShape(16.dp),color=Color(0xFFE8DDD4)) {
+                Row(Modifier.fillMaxWidth().padding(16.dp),horizontalArrangement=Arrangement.SpaceBetween) {
+                    Text("01  Measure",style=MaterialTheme.typography.labelMedium)
+                    Text("02  Save",style=MaterialTheme.typography.labelMedium)
+                    Text("03  Shop",style=MaterialTheme.typography.labelMedium)
+                }
+            }
             OutlinedTextField(value=roomName,onValueChange={roomName=it.take(60)},label={Text("Which room are you measuring?")},singleLine=true,modifier=Modifier.fillMaxWidth())
-            Text("Where will you scan?")
+            Text("Choose your scan",fontWeight=FontWeight.SemiBold)
             Row(horizontalArrangement=Arrangement.spacedBy(12.dp)) {
                 FilterChip(selected=!ceiling,onClick={ceiling=false},label={Text("Floor corners")})
                 FilterChip(selected=ceiling,onClick={ceiling=true},label={Text("Ceiling corners")})
@@ -53,8 +71,8 @@ fun PlannerStartScreen(onScan:(String, Boolean)->Unit,onRooms:()->Unit,onManual:
             OutlinedButton(onClick=onRooms,modifier=Modifier.fillMaxWidth().heightIn(min=50.dp)){Text("My saved rooms ($rooms)")}
             TextButton(onClick=onManual,modifier=Modifier.fillMaxWidth()){Text("I already have tape measurements")}
             HorizontalDivider()
-            Text("No account needed. Your rooms stay on this phone.",style=MaterialTheme.typography.bodySmall)
-            TextButton(onClick={context.startActivity(Intent(Intent.ACTION_VIEW,Uri.parse("https://cozyflooringstore.co.uk/")))}){Text("Visit Cozy Flooring ↗")}
+            Text("Your home, your measurements.\nNo account needed. Saved rooms stay on this phone.",style=MaterialTheme.typography.bodySmall)
+            TextButton(onClick={context.startActivity(Intent(Intent.ACTION_VIEW,Uri.parse("https://cozyflooringstore.co.uk/")))}){Text("Browse Cozy flooring ↗")}
         } else {
             TextButton(onClick={if(guide>0)guide-- else guide= -1}){Text("← Back")}
             Text("HOW TO MEASURE · ${guide+1} OF 3",color=Color(0xFF8B7566),style=MaterialTheme.typography.labelLarge)

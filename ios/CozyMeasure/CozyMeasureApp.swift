@@ -303,11 +303,12 @@ struct PlannerWelcomeView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 22) {
-                Text("COZY FLOORING").font(.caption).tracking(3).foregroundColor(.brown)
+                VStack(alignment:.leading,spacing:2) { Text("cozy").font(.system(size:40,design:.serif)); Text("FLOORING · ROOM MEASURING").font(.caption2).tracking(2) }.foregroundColor(Color(red:0.42,green:0.33,blue:0.28))
                 if guide < 0 {
-                    Text("Your room.\nA clearer plan.").font(.largeTitle).bold()
-                    Text("Measure with your camera, save a floor plan and find your carpet size.")
-                    WelcomePlanArt(step: 2).frame(height:220)
+                    Image("CozyHome").resizable().scaledToFill().frame(height:200).clipped().clipShape(RoundedRectangle(cornerRadius:22)).accessibilityLabel("Warm, neutral interior from the Cozy Flooring storefront")
+                    Text("A cozier home\nstarts here.").font(.system(.largeTitle,design:.serif))
+                    Text("Measure your space. Save your room. Find your flooring.")
+                    HStack { Text("01  Measure"); Spacer(); Text("02  Save"); Spacer(); Text("03  Shop") }.font(.caption).padding(16).background(Color(red:0.91,green:0.87,blue:0.83)).clipShape(RoundedRectangle(cornerRadius:16))
                     TextField("Room name", text: $roomName).textFieldStyle(.roundedBorder)
                     Picker("Scan surface", selection: $ceilingMode) {
                         Text("Floor corners").tag(false)

@@ -2,7 +2,7 @@ name: Build Cozy Measure
 on:
   workflow_dispatch:
   push:
-    branches: [main, fix/ar-accuracy]
+    branches: [main, fix/ar-accuracy, fix/cozy-branding]
 permissions:
   contents: read
 jobs:
