@@ -178,7 +178,7 @@ struct ContentView: View {
     private var shopURL: URL {
         var url = URLComponents(string: "https://cozyflooringstore.co.uk/collections/all")!
         let planText = (try? JSONEncoder().encode(plan)).flatMap { String(data:$0,encoding:.utf8) } ?? "[]"
-        url.queryItems = [URLQueryItem(name:"cozy_plan",value:planText), URLQueryItem(name: "cozy_room", value: roomName), URLQueryItem(name: "cozy_length", value: String(number(length))), URLQueryItem(name: "cozy_width", value: String(number(width)))]
+        url.queryItems = [URLQueryItem(name:"cozy_allowance",value:allowance ? "1" : "0"), URLQueryItem(name:"cozy_plan",value:planText), URLQueryItem(name: "cozy_room", value: roomName), URLQueryItem(name: "cozy_length", value: String(number(length))), URLQueryItem(name: "cozy_width", value: String(number(width)))]
         return url.url!
     }
     private let brown = Color(red: 0.545, green: 0.459, blue: 0.400)

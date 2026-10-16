@@ -113,7 +113,7 @@ fun CarpetScreen(viewModel: MeasureViewModel, importScan: Boolean = true) {
             Text("Orientation may be rotated. Check product minimum length, pile direction, patterns and available widths. Phone estimates need checking before ordering. Stairs and connected rooms need a separate plan.")
             Button(onClick={
                 val outline=JSONArray();plan.forEach{outline.put(JSONObject().put("x",it.x).put("y",it.y))}
-                val url=Uri.parse("https://cozyflooringstore.co.uk/collections/all").buildUpon().appendQueryParameter("cozy_plan",outline.toString()).appendQueryParameter("cozy_room",roomName).appendQueryParameter("cozy_length",number(length).toString()).appendQueryParameter("cozy_width",number(width).toString()).build()
+                val url=Uri.parse("https://cozyflooringstore.co.uk/collections/all").buildUpon().appendQueryParameter("cozy_allowance",if(allowance) "1" else "0").appendQueryParameter("cozy_plan",outline.toString()).appendQueryParameter("cozy_room",roomName).appendQueryParameter("cozy_length",number(length).toString()).appendQueryParameter("cozy_width",number(width).toString()).build()
                 context.startActivity(Intent(Intent.ACTION_VIEW,url))
             }) { Text("Shop with these measurements") }
             TextButton(onClick={
