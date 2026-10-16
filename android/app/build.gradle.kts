@@ -13,8 +13,8 @@ android {
         applicationId = "uk.cozyflooring.measure"
         minSdk = 26
         targetSdk = 35
-        versionCode = 6
-        versionName = "0.6.0-test"
+        versionCode = 7
+        versionName = "0.7.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {
@@ -22,8 +22,19 @@ android {
         }
     }
 
+    val releaseStore = providers.environmentVariable("COZY_KEYSTORE_PATH").orNull
+    signingConfigs {
+        if (releaseStore != null) create("cozyRelease") {
+            storeFile = file(releaseStore)
+            storePassword = providers.environmentVariable("COZY_STORE_PASSWORD").orNull
+            keyAlias = providers.environmentVariable("COZY_KEY_ALIAS").orNull
+            keyPassword = providers.environmentVariable("COZY_KEY_PASSWORD").orNull
+        }
+    }
     buildTypes {
+        debug { versionNameSuffix = "-test" }
         release {
+            if (releaseStore != null) signingConfig = signingConfigs.getByName("cozyRelease")
             isMinifyEnabled = false
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
@@ -69,4 +80,12 @@ dependencies {
     androidTestImplementation(libs.androidx.espresso.core)
     androidTestImplementation(platform(libs.androidx.compose.bom))
     debugImplementation(libs.androidx.ui.tooling)
+}
+
+gradle.taskGraph.whenReady {
+    if (allTasks.any { it.name.contains("Release", ignoreCase = false) }) {
+        listOf("COZY_KEYSTORE_PATH", "COZY_STORE_PASSWORD", "COZY_KEY_ALIAS", "COZY_KEY_PASSWORD").forEach {
+            require(!System.getenv(it).isNullOrBlank()) { "Signed releases require $it. See RELEASE.md." }
+        }
+    }
 }

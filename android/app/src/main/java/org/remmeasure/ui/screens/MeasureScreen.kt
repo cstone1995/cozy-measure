@@ -207,7 +207,7 @@ fun MeasureScreen(
             modifier = Modifier.fillMaxSize(),
             engine = engine,
             childNodes = childNodes,
-            planeRenderer = false,
+            planeRenderer = viewModel.ceilingMode,
             sessionConfiguration = { session, config ->
                 config.planeFindingMode = Config.PlaneFindingMode.HORIZONTAL
                 config.lightEstimationMode = Config.LightEstimationMode.ENVIRONMENTAL_HDR
@@ -259,7 +259,7 @@ fun MeasureScreen(
                             onNoHit = {
                                 candidatePlanePose = null
                                 stability.reset();captureRequested=false
-                                viewModel.invalidateRoomTarget("Scan the $surface slowly in good light. Aim beside the wall.")
+                                viewModel.invalidateRoomTarget(if(viewModel.ceilingMode) "First scan a broad ceiling patch near a light fitting or textured edge. Move sideways slowly, then aim at a corner. Plain ceilings may need Floor mode." else "Scan the floor slowly in good light. Aim beside the wall.")
                             }
                         )
                     }
@@ -795,7 +795,7 @@ private fun performCenterRaycast(
     val validHit = hitResults.firstOrNull { hit ->
         val trackable = hit.trackable
         when (trackable) {
-            is Plane -> trackable.type == (if (ceilingMode) Plane.Type.HORIZONTAL_DOWNWARD_FACING else Plane.Type.HORIZONTAL_UPWARD_FACING) && trackable.isPoseInPolygon(hit.hitPose) && trackable.trackingState == TrackingState.TRACKING
+            is Plane -> trackable.type == (if (ceilingMode) Plane.Type.HORIZONTAL_DOWNWARD_FACING else Plane.Type.HORIZONTAL_UPWARD_FACING) && (trackable.isPoseInPolygon(hit.hitPose) || (ceilingMode && trackable.isPoseInExtents(hit.hitPose))) && trackable.trackingState == TrackingState.TRACKING
             else -> false
         }
     }

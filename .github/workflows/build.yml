@@ -21,6 +21,18 @@ jobs:
       - uses: gradle/actions/setup-gradle@v4
       - run: chmod +x gradlew && ./gradlew :app:assembleDebug :app:testDebugUnitTest
         working-directory: android
+      - name: Verify release signing configuration with a disposable test key
+        working-directory: android
+        run: |
+          set -euo pipefail
+          export COZY_KEYSTORE_PATH="$RUNNER_TEMP/cozy-ci-only.jks"
+          export COZY_STORE_PASSWORD=ci-only-password
+          export COZY_KEY_PASSWORD=ci-only-password
+          export COZY_KEY_ALIAS=ci-only
+          trap 'rm -f "$COZY_KEYSTORE_PATH"' EXIT
+          keytool -genkeypair -keystore "$COZY_KEYSTORE_PATH" -storepass "$COZY_STORE_PASSWORD" -keypass "$COZY_KEY_PASSWORD" -alias "$COZY_KEY_ALIAS" -keyalg RSA -keysize 2048 -validity 2 -dname "CN=Disposable CI Test"
+          ./gradlew :app:testReleaseUnitTest :app:assembleRelease
+          "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify app/build/outputs/apk/release/app-release.apk
       - uses: actions/upload-artifact@v4
         with:
           name: Cozy-Measure-Android-debug

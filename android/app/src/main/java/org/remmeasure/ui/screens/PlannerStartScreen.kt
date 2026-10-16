@@ -32,7 +32,7 @@ fun PlannerStartScreen(onScan:(String, Boolean)->Unit,onRooms:()->Unit,onManual:
     val rooms=runCatching{JSONArray(context.getSharedPreferences("cozy_saved_rooms",0).getString("rooms","[]")).length()}.getOrDefault(0)
     val titles=listOf("First, find the $surface","Follow the room’s corners","Review, save and shop")
     val instructions=listOf(
-        "Turn on the lights. Point your camera at a clear patch of $surface and move slowly side to side. Wait for Surface found before adding a corner.",
+        if(ceiling) "Turn on the lights. Scan a broad ceiling patch near a light fitting or textured edge. Move slowly sideways to help tracking. Once a surface is detected, aim at the wall–ceiling corners. If no ceiling is found, use Floor corners." else "Turn on the lights. Point your camera at a clear patch of floor and move slowly side to side. Wait for Surface found before adding a corner.",
         "Aim where the $surface meets the wall at your first corner. Tap Add corner. Walk around the room in one direction and add every corner, including alcoves and door recesses. Do not add the first corner twice.",
         "After the last corner, tap Finish room. Check the outline and wall lengths. Name and save the room, then choose a carpet cut. Phone estimates need checking before you order."
     )
