@@ -66,6 +66,8 @@ final class RoomMeasure: NSObject, ObservableObject, ARSessionDelegate {
     let view = ARSCNView(frame: .zero)
     @Published var status = "Move slowly to find the floor. Aim at the first floor corner."
     @Published var corners: [SIMD3<Float>] = []
+    @Published var ceilingMode = false
+    var surfaceName: String { ceilingMode ? "ceiling" : "floor" }
     @Published var closed = false
     var outline: RoomOutline? { RoomOutline.summarize(corners) }
     @Published var permissionDenied = false
@@ -96,13 +98,18 @@ final class RoomMeasure: NSObject, ObservableObject, ARSessionDelegate {
     func point() {
         guard !closed, corners.count < 40 else { status = "Room complete, or 40-corner limit reached. Review the plan."; return }
         guard let frame = view.session.currentFrame else { status = "Wait for the camera to start."; return }
-        guard case .normal = frame.camera.trackingState else { status = "Tracking uncertain. Scan the floor slowly in good light."; return }
+        guard case .normal = frame.camera.trackingState else { status = "Tracking uncertain. Scan the \(surfaceName) slowly in good light."; return }
         let center=CGPoint(x:view.bounds.midX,y:view.bounds.midY)
-        guard let query=view.raycastQuery(from:center,allowing:.existingPlaneGeometry,alignment:.horizontal), let hit=view.session.raycast(query).first else { status = "Floor not found. Move slowly and aim beside the wall."; return }
+        guard let query=view.raycastQuery(from:center,allowing:.existingPlaneGeometry,alignment:.horizontal), let hit=view.session.raycast(query).first(where: { result in
+            guard let plane = result.anchor as? ARPlaneAnchor else { return false }
+            let y = result.worldTransform.columns.3.y
+            let cameraY = frame.camera.transform.columns.3.y
+            return plane.alignment == .horizontal && (ceilingMode ? y > cameraY : y < cameraY)
+        }) else { status = "\(surfaceName.capitalized) not found. Move slowly and aim beside the wall."; return }
         let t=hit.worldTransform.columns.3
         let raw=SIMD3<Float>(t.x,t.y,t.z)
         let floor=corners.first?.y ?? raw.y
-        guard abs(raw.y-floor) <= 0.08 else { status = "Aim at the same floor level, not furniture or a step."; return }
+        guard abs(raw.y-floor) <= 0.08 else { status = "Aim at the same \(surfaceName) level. Do not mix floor and ceiling corners."; return }
         let p=SIMD3<Float>(raw.x,floor,raw.z)
         if let last=corners.last, simd_distance(last,p)<0.1 { status = "Too close to the last corner. Aim at the next one."; return }
         let node=SCNNode(geometry:SCNSphere(radius:0.015));node.geometry?.firstMaterial?.diffuse.contents=UIColor.brown
@@ -126,12 +133,12 @@ final class RoomMeasure: NSObject, ObservableObject, ARSessionDelegate {
         if closed { closed=false } else if !corners.isEmpty { corners.removeLast();anchorNodes.removeLast().removeFromParentNode() }
         wallNodes.forEach{$0.removeFromParentNode()};wallNodes=[]
         if corners.count>1 { for i in 1..<corners.count { addWall(corners[i-1],corners[i]) } }
-        status="Aim at the next floor corner."
+        status="Aim at the next \(surfaceName) corner."
     }
     func reset() {
         corners=[];closed=false;anchorNodes.forEach{$0.removeFromParentNode()};anchorNodes=[]
         wallNodes.forEach{$0.removeFromParentNode()};wallNodes=[]
-        status="Find the floor. Add each corner around the room in order."
+        status="Find the \(surfaceName). Add each corner around the room in order."
     }
     func sessionWasInterrupted(_ session: ARSession) { interrupted = true; DispatchQueue.main.async { self.reset(); self.status = "Camera interrupted. Restart and measure again." } }
     func session(_ session: ARSession, didFailWithError error: Error) { DispatchQueue.main.async { self.reset(); self.status = "Camera tracking stopped. Restart and measure again." } }
@@ -171,18 +178,18 @@ struct ContentView: View {
     private var shopURL: URL {
         var url = URLComponents(string: "https://cozyflooringstore.co.uk/collections/all")!
         let planText = (try? JSONEncoder().encode(plan)).flatMap { String(data:$0,encoding:.utf8) } ?? "[]"
-        url.queryItems = [URLQueryItem(name:"cozy_plan",value:planText), URLQueryItem(name: "cozy_room", value: roomName), URLQueryItem(name: "cozy_length", value: String(number(length))), URLQueryItem(name: "cozy_width", value: String(number(width)))]
+        url.queryItems = [URLQueryItem(name:"cozy_allowance",value:allowance ? "1" : "0"), URLQueryItem(name:"cozy_plan",value:planText), URLQueryItem(name: "cozy_room", value: roomName), URLQueryItem(name: "cozy_length", value: String(number(length))), URLQueryItem(name: "cozy_width", value: String(number(width)))]
         return url.url!
     }
     private let brown = Color(red: 0.545, green: 0.459, blue: 0.400)
     private func number(_ s: String) -> Double { Double(s.replacingOccurrences(of: ",", with: ".")) ?? 0 }
     var body: some View {
         TabView(selection: $tab) {
-            PlannerWelcomeView(roomName:$roomName,roomCount:savedRooms.count,onScan:{model.reset();tab=0},onRooms:{tab=1})
+            PlannerWelcomeView(roomName:$roomName,ceilingMode:$model.ceilingMode,roomCount:savedRooms.count,onScan:{model.reset();tab=0},onRooms:{tab=1})
                 .tabItem { Label("My rooms",systemImage:"house") }.tag(2)
             VStack(spacing: 12) {
                 Text("Cozy Measure").font(.largeTitle).bold()
-                Text("1 Find the floor. 2 Aim at each corner around the room and tap Add corner. Include door recesses and alcoves. 3 Finish room.").padding(.horizontal)
+                Text("1 Find the \(model.surfaceName). 2 Aim at each corner around the room and tap Add corner. Include door recesses and alcoves. 3 Finish room.").padding(.horizontal)
                 ZStack { CameraView(model: model); Image(systemName: "plus").font(.largeTitle).foregroundColor(.white).shadow(radius: 2) }.frame(maxHeight: .infinity)
                 Text(model.status).font(.callout).padding(.horizontal).accessibilityAddTraits(.updatesFrequently)
                 HStack {
@@ -281,16 +288,18 @@ struct FloorPlanView: View {
 
 struct PlannerWelcomeView: View {
     @Binding var roomName: String
+    @Binding var ceilingMode: Bool
+    private var surfaceName: String { ceilingMode ? "ceiling" : "floor" }
     let roomCount: Int
     let onScan: () -> Void
     let onRooms: () -> Void
     @State private var guide = -1
-    private let titles = ["First, find the floor", "Follow the room’s corners", "Review, save and shop"]
-    private let steps = [
-        "Turn on the lights. Point your camera at a clear patch of floor and move slowly side to side. Wait for the floor to be found.",
-        "Aim where the floor meets the wall. Add the first corner. Walk around the room in one direction, adding each corner, including alcoves and door recesses. Do not add the first corner twice.",
+    private var titles: [String] { ["First, find the \(surfaceName)", "Follow the room’s corners", "Review, save and shop"] }
+    private var steps: [String] { [
+        "Turn on the lights. Point your camera at a clear patch of \(surfaceName) and move slowly side to side. Wait for the \(surfaceName) to be found.",
+        "Aim where the \(surfaceName) meets the wall. Add the first corner. Walk around the room in one direction, adding each corner, including alcoves and door recesses. Do not add the first corner twice.",
         "Tap Finish room after the last corner. Check the outline and wall lengths, save the room and choose a carpet cut. Check phone estimates before ordering."
-    ]
+    ] }
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 22) {
@@ -300,6 +309,11 @@ struct PlannerWelcomeView: View {
                     Text("Measure with your camera, save a floor plan and find your carpet size.")
                     WelcomePlanArt(step: 2).frame(height:220)
                     TextField("Room name", text: $roomName).textFieldStyle(.roundedBorder)
+                    Picker("Scan surface", selection: $ceilingMode) {
+                        Text("Floor corners").tag(false)
+                        Text("Ceiling corners").tag(true)
+                    }.pickerStyle(.segmented)
+                    if ceilingMode { Text("Use a flat ceiling only where its outline matches the floor. Floor-only recesses, sloped ceilings, beams and different heights need floor measurements.").font(.caption) }
                     Button("Measure a room →") { guide=0 }.buttonStyle(.borderedProminent).controlSize(.large)
                     Button("My saved rooms (\(roomCount))", action:onRooms).buttonStyle(.bordered).controlSize(.large)
                     Button("I already have tape measurements", action:onRooms)

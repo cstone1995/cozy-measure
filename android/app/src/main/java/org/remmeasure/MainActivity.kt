@@ -80,7 +80,7 @@ fun MainAppScaffold(
     BackHandler(enabled=screen!="home") { screen="home" }
     when(screen) {
         "home" -> PlannerStartScreen(
-            onScan={name -> measureViewModel.clearAllMeasurements();measureViewModel.setRoomName(name);screen="scan"},
+            onScan={name, ceiling -> measureViewModel.setCeilingMode(ceiling); measureViewModel.clearAllMeasurements();measureViewModel.setRoomName(name);screen="scan"},
             onRooms={screen="saved"},onManual={screen="manual"}
         )
         "scan" -> MeasureScreen(viewModel=measureViewModel,onReviewRoom={screen="review"})

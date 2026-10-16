@@ -51,13 +51,26 @@ class MeasureViewModel(application: Application) : AndroidViewModel(application)
     )
     val uiState: StateFlow<MeasureUiState> = _uiState.asStateFlow()
 
-    fun onSurfaceHit(rawHitPoint: Vector3, isVerticalSnap: Boolean = false) {
+    var ceilingMode: Boolean = false
+        private set
+    val surfaceName: String get() = if (ceilingMode) "ceiling" else "floor"
+    fun setCeilingMode(enabled: Boolean) { ceilingMode = enabled }
+
+    fun onSurfaceHit(rawHitPoint: Vector3, isVerticalSnap: Boolean = false, isStable: Boolean = true) {
         val state = _uiState.value
         if(state.roomClosed) return
         val floor = state.roomCorners.firstOrNull()?.y ?: rawHitPoint.y
-        if(kotlin.math.abs(rawHitPoint.y-floor)>0.08f){ invalidateRoomTarget("Aim at the same floor, not furniture or a step.");return }
+        if(kotlin.math.abs(rawHitPoint.y-floor)>0.08f){ invalidateRoomTarget("Aim at the same $surfaceName level. Do not mix floor and ceiling corners.");return }
         val point=Vector3(rawHitPoint.x,floor,rawHitPoint.z)
-        _uiState.update { it.copy(candidatePoint=point,liveDistanceMeters=state.roomCorners.lastOrNull()?.distanceTo(point) ?: 0f,trackingStatus=TrackingStatus.TRACKING_READY) }
+        _uiState.update { it.copy(candidatePoint=point,roomMessage=if(isStable) "Aim at the $surfaceName corner and tap Add corner." else "Surface found. Steady the phone for a better reading, then tap Add corner.",liveDistanceMeters=state.roomCorners.lastOrNull()?.distanceTo(point) ?: 0f,trackingStatus=TrackingStatus.TRACKING_READY) }
+    }
+
+    fun updateTrackedCorners(points: List<Vector3>) {
+        val state=_uiState.value
+        if(state.roomClosed||points.size!=state.roomCorners.size||points.isEmpty())return
+        val floor=points.first().y
+        val flat=points.map{Vector3(it.x,floor,it.z)}
+        _uiState.update{it.copy(roomCorners=flat,currentStartPoint=flat.last(),measurements=flat.zipWithNext{a,b->MeasurementSegment(start=a,end=b)})}
     }
 
     fun setRoomName(name: String) { _uiState.update { it.copy(roomName=name.take(60)) } }
@@ -74,7 +87,7 @@ class MeasureViewModel(application: Application) : AndroidViewModel(application)
     fun undoRoomCorner() {
         val state=_uiState.value
         val points=if(state.roomClosed)state.roomCorners else state.roomCorners.dropLast(1)
-        _uiState.update{it.copy(roomCorners=points,roomClosed=false,currentStartPoint=points.lastOrNull(),measurements=points.zipWithNext{a,b->MeasurementSegment(start=a,end=b)},candidatePoint=null,roomMessage="Aim at the next floor corner and add it.")}
+        _uiState.update{it.copy(roomCorners=points,roomClosed=false,currentStartPoint=points.lastOrNull(),measurements=points.zipWithNext{a,b->MeasurementSegment(start=a,end=b)},candidatePoint=null,roomMessage="Aim at the next $surfaceName corner and add it.")}
     }
 
     fun onTrackingStateUpdated(newStatus: TrackingStatus) {
@@ -113,8 +126,9 @@ class MeasureViewModel(application: Application) : AndroidViewModel(application)
         _uiState.update {
             it.copy(
                 roomCorners = emptyList(),
+                candidatePoint = null,
                 roomClosed = false,
-                roomMessage = "Find the floor, then add each corner in order.",
+                roomMessage = "Find the $surfaceName, then add each corner in order.",
                 measurements = emptyList(),
                 currentStartPoint = null,
                 liveDistanceMeters = 0f,
