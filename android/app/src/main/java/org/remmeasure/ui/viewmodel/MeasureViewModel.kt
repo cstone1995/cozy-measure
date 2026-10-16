@@ -51,13 +51,13 @@ class MeasureViewModel(application: Application) : AndroidViewModel(application)
     )
     val uiState: StateFlow<MeasureUiState> = _uiState.asStateFlow()
 
-    fun onSurfaceHit(rawHitPoint: Vector3, isVerticalSnap: Boolean = false) {
+    fun onSurfaceHit(rawHitPoint: Vector3, isVerticalSnap: Boolean = false, isStable: Boolean = true) {
         val state = _uiState.value
         if(state.roomClosed) return
         val floor = state.roomCorners.firstOrNull()?.y ?: rawHitPoint.y
         if(kotlin.math.abs(rawHitPoint.y-floor)>0.08f){ invalidateRoomTarget("Aim at the same floor, not furniture or a step.");return }
         val point=Vector3(rawHitPoint.x,floor,rawHitPoint.z)
-        _uiState.update { it.copy(candidatePoint=point,liveDistanceMeters=state.roomCorners.lastOrNull()?.distanceTo(point) ?: 0f,trackingStatus=TrackingStatus.TRACKING_READY) }
+        _uiState.update { it.copy(candidatePoint=point,roomMessage=if(isStable) "Aim at the floor corner and tap Add corner." else "Floor found. Steady the phone for a better reading, then tap Add corner.",liveDistanceMeters=state.roomCorners.lastOrNull()?.distanceTo(point) ?: 0f,trackingStatus=TrackingStatus.TRACKING_READY) }
     }
 
     fun updateTrackedCorners(points: List<Vector3>) {

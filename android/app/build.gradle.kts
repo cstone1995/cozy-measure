@@ -13,8 +13,8 @@ android {
         applicationId = "uk.cozyflooring.measure"
         minSdk = 26
         targetSdk = 35
-        versionCode = 4
-        versionName = "0.4.0-test"
+        versionCode = 5
+        versionName = "0.5.0-test"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {

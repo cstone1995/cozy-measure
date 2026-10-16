@@ -239,11 +239,11 @@ fun MeasureScreen(
                             onHit = { hitVector, hitPlanePose, hit ->
                                 candidatePlanePose = hitPlanePose
                                 val stable=stability.update(hitVector,frame.timestamp)
-                                if(warmFrames<45||!stable){
-                                    viewModel.invalidateRoomTarget("Hold the target still on the floor corner for a moment.")
+                                if(warmFrames<45){
+                                    viewModel.invalidateRoomTarget("Finding the floor. Move the phone slowly over the room.")
                                     captureRequested=false
                                 } else {
-                                    viewModel.onSurfaceHit(hitVector, isVerticalSnap = false)
+                                    viewModel.onSurfaceHit(hitVector, isVerticalSnap = false, isStable = stable)
                                     if(captureRequested){
                                         captureRequested=false
                                         val anchor=runCatching{hit.createAnchor()}.getOrNull()
@@ -713,7 +713,7 @@ fun MeasureScreen(
             if(uiState.roomClosed) {
                 Button(onClick=onReviewRoom) { Text("Review floor plan & carpet size") }
             } else {
-                Text(if(uiState.candidatePoint!=null) "Target steady · ready to capture" else "Find the floor corner and hold still",color=Color.White)
+                Text(if(uiState.candidatePoint!=null) "Floor found · tap Add corner" else "Move slowly to find the floor",color=Color.White)
                 Button(enabled=uiState.candidatePoint!=null,onClick={captureRequested=true}) { Text("Add corner ${uiState.roomCorners.size+1}") }
                 if(uiState.roomCorners.size>=3) Button(onClick={if(anchorsTracking && viewModel.closeRoom())onReviewRoom()}){Text("Finish room")}
             }
